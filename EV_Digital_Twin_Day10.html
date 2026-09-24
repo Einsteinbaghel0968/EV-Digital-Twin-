@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EV Motor &amp; Drivetrain Digital Twin</title>
+<style>
+:root{--bg:#0d1218;--pn:#151c24;--pn2:#1a232d;--bd:#2a3644;--tx:#dbe4ec;--dim:#7f90a2;--blue:#4a9be0;--grn:#4fcf82;--amb:#e3a83a;--red:#e05a4e;--mono:Consolas,"SFMono-Regular",Menlo,monospace;--sans:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif}
+*{box-sizing:border-box}html,body{height:100%;margin:0;background:var(--bg);color:var(--tx);font:12px var(--sans);overflow:hidden}
+#err{display:none;position:fixed;z-index:9;top:0;left:0;right:0;background:#5a1712;color:#ffd9d4;font:12px var(--mono);padding:8px 14px;border-bottom:1px solid var(--red)}
+#app{display:grid;height:100vh;grid-template-columns:clamp(190px,16vw,270px) minmax(0,1fr) clamp(230px,20vw,330px);grid-template-rows:50px minmax(0,1fr) 184px 46px;gap:1px;background:var(--bd)}
+.p{background:var(--pn);min-width:0;min-height:0;overflow:auto;padding:10px 12px}
+#hdr{grid-column:1/4;display:flex;align-items:center;justify-content:space-between;padding:0 16px;overflow:hidden}
+#hdr h1{margin:0;font-size:15px;font-weight:600;letter-spacing:.3px}#hdr .s{font-size:11px;color:var(--dim);margin-top:2px}
+.badge{border:1px solid var(--amb);color:var(--amb);padding:4px 10px;font:600 11px var(--mono);letter-spacing:.5px;white-space:nowrap}
+#left{grid-row:2/4}#view{grid-column:2;grid-row:2;position:relative;padding:0;overflow:hidden;background:radial-gradient(ellipse at 50% 40%,#18212b,#0d1218 75%)}
+#scene{position:absolute;inset:0}#scene canvas{display:block;cursor:grab}
+#tel{grid-column:3;grid-row:2}#graphs{grid-column:2;grid-row:3;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;padding:0;background:var(--bd);overflow:hidden}
+#graphs div{background:var(--pn);position:relative;min-width:0}#graphs canvas{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair}
+#twin{grid-column:3;grid-row:3}#ctl{grid-column:1/4;display:flex;align-items:center;gap:12px;padding:0 16px;overflow:hidden}
+h3{margin:0 0 7px;font:600 10px var(--sans);letter-spacing:.9px;color:var(--dim);text-transform:uppercase}
+.cb,.sb{display:block;width:100%;text-align:left;background:var(--pn2);border:1px solid var(--bd);color:var(--tx);padding:6px 9px;margin-bottom:5px;cursor:pointer;font:12px var(--sans)}
+.cb.on{border-color:var(--grn);background:#183024}.cb b{display:block;font-weight:600}.cb i{display:block;font:normal 10.5px var(--mono);color:var(--dim);margin-top:1px}
+.sb{color:var(--dim);font-size:11.5px}.sb.on{border-color:var(--amb);color:var(--amb);background:#2b2415}
+.note{font-size:10.5px;color:var(--amb);margin:4px 0 12px;min-height:14px;font-family:var(--mono)}
+.r{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #222d39}.r span:first-child{color:var(--dim)}.r span:last-child{font-family:var(--mono)}
+.bar{height:6px;background:#0c1116;border:1px solid var(--bd);margin:5px 0 8px}.bar div{height:100%;width:0;background:var(--grn)}
+#flow{margin-top:8px}#flow div{font:600 10.5px var(--mono);padding:3px 8px;margin-bottom:2px;border-left:3px solid var(--bd);color:var(--dim)}
+#flow div.on{color:var(--tx);border-color:var(--grn);background:#183024}#flow.rg div.on{border-color:var(--amb);background:#2b2415}
+.ok{color:var(--grn)}.wn{color:var(--amb)}.bad{color:var(--red)}
+button.b{background:var(--pn2);border:1px solid var(--bd);color:var(--tx);padding:5px 12px;cursor:pointer;font:12px var(--sans)}button.b.on{border-color:var(--blue);color:var(--blue)}
+#scrub{flex:1;accent-color:var(--blue)}#tl{font:12px var(--mono);min-width:120px;text-align:center}
+.ov{position:absolute;pointer-events:none;font:11px var(--mono);color:var(--dim)}
+#warn{top:12px;right:14px;text-align:right;font-weight:600}#legend{left:14px;bottom:10px}#sim{top:12px;left:14px;color:var(--amb)}
+#reset{position:absolute;right:14px;bottom:10px}
+</style></head><body>
+<div id="err"></div>
+<div id="app">
+<header id="hdr" class="p"><div><h1>EV Motor &amp; Drivetrain Digital Twin</h1><div class="s">Engineering Console — Nissan LEAF 40 kWh Reference Model · Software-Based Digital Twin Prototype · Physics-Based Synthetic Telemetry</div></div><div class="badge">SIMULATED / PHYSICS-BASED</div></header>
+<aside id="left" class="p"><h3>Component Inspection</h3><div id="comps"></div><h3 style="margin-top:14px">Scenario Preview</h3><div id="scens"></div><div class="note" id="scnote"></div></aside>
+<main id="view"><div id="scene"></div><div class="ov" id="sim"></div><div class="ov" id="warn"></div><div class="ov" id="legend">drag: orbit · wheel: zoom · right-drag / shift-drag: pan</div><button class="b" id="reset">Reset View</button></main>
+<aside id="tel" class="p"><h3>Live Telemetry (synthetic)</h3><div id="rows"></div><div class="bar"><div id="socbar"></div></div><h3 id="fdir" style="margin-top:10px">Energy Flow — Traction</h3><div id="flow"></div></aside>
+<section id="graphs" class="p"></section>
+<aside id="twin" class="p"><h3>Twin State / Synchronization</h3><div id="trows"></div></aside>
+<footer id="ctl" class="p"><button class="b" id="play" style="min-width:74px">▶ Play</button><input type="range" id="scrub" min="0" max="80" step="0.05" value="0"><span id="tl">0.0 / 80.0 s</span><span id="spd"></span></footer>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+'use strict';
+/* ===== 14. ERROR HANDLING ===== */
+const errBox=document.getElementById('err');
+function showErr(m){errBox.style.display='block';errBox.textContent=m;}
+window.addEventListener('error',e=>showErr('Runtime error: '+e.message+(e.lineno?' (line '+e.lineno+')':'')));
+window.addEventListener('unhandledrejection',e=>showErr('Runtime error: '+((e.reason&&e.reason.message)||e.reason)));
+try{ if(typeof THREE==='undefined') throw new Error('Three.js failed to load (CDN unreachable).'); main(); }catch(e){ showErr(e.message); }
+
+function main(){
+/* ===== 1. CONFIGURATION ===== */
+const VEHICLE_PARAMS={battery_kwh:40,battery_voltage_nominal:350,motor_power_kw:110,motor_torque_nm:320,base_rpm:3283,gear_ratio:8.19,wheel_radius_m:0.316,mass_kg:1565,cd:0.29,crr:0.010,air_density:1.225,inverter_efficiency:0.97,drivetrain_efficiency:0.95,
+  frontal_area_m2:2.3,pack_resistance_ohm:0.09,aux_kw:0.4,motor_thermal_c:4000,inv_thermal_c:2500};
+const DT=0.1, DURATION=80, SYNC_TOL=0.15, PEAK_KMH=70;
+const THRESH={warn:50,high:70}; // motor-temperature visualization thresholds (assumptions)
+const SCENARIOS={
+ normal:{label:'NORMAL DRIVE',soc0:90,T0:25,hA:45,lossK:1,etaM:0.94,note:''},
+ overtemp:{label:'MOTOR OVERTEMPERATURE',soc0:90,T0:55,hA:6,lossK:3,etaM:0.94,note:'SIMULATED SCENARIO: raised motor losses + degraded cooling, warm start'},
+ loweff:{label:'REDUCED MOTOR EFFICIENCY',soc0:90,T0:25,hA:45,lossK:1,etaM:0.78,note:'SIMULATED SCENARIO: motor efficiency 0.94 → 0.78'},
+ lowsoc:{label:'BATTERY SOC REDUCTION',soc0:25,T0:25,hA:45,lossK:1,etaM:0.94,note:'SIMULATED SCENARIO: initial SOC set to 25 %'}};
+let scenarioKey='normal';
+
+/* ===== 2. TELEMETRY (physics-based synthetic) ===== */
+// @@GEN-START
+function speedProfile(t){ // prescribed speed [km/h]: stop 0-10, accel 10-25, cruise 25-55, decel 55-70, stop 70-80
+  const ss=x=>{x=Math.min(1,Math.max(0,x));return x*x*(3-2*x);};
+  if(t<10)return 0; if(t<25)return PEAK_KMH*ss((t-10)/15); if(t<55)return PEAK_KMH; if(t<70)return PEAK_KMH*(1-ss((t-55)/15)); return 0;}
+function generateTelemetry(sc){
+  const P=VEHICLE_PARAMS,g=9.81,n=Math.round(DURATION/DT),out=[];
+  let soc=sc.soc0,Tm=sc.T0,Ti=25+0.3*(sc.T0-25),dist=0;
+  for(let i=0;i<=n;i++){
+    const t=+(i*DT).toFixed(3), v=speedProfile(t)/3.6;
+    const a=(speedProfile(t+DT)-speedProfile(t-DT))/3.6/(2*DT);
+    const Fdrag=0.5*P.air_density*P.cd*P.frontal_area_m2*v*v, Froll=v>0.01?P.crr*P.mass_kg*g:0, Fgrade=0;
+    const Ftr=P.mass_kg*a+Fdrag+Froll+Fgrade;                    // m·dv/dt = F_tr − F_drag − F_roll − F_grade
+    const Tw=Ftr*P.wheel_radius_m, w=P.gear_ratio*v/P.wheel_radius_m; // ω_m = G·v/r
+    let T=Tw>=0?Tw/(P.gear_ratio*P.drivetrain_efficiency):Tw*P.drivetrain_efficiency/P.gear_ratio;
+    const lim=Math.min(P.motor_torque_nm,P.motor_power_kw*1000/Math.max(w,1));
+    T=Math.max(-lim,Math.min(lim,T));
+    const rpm=w*60/(2*Math.PI), Pm=T*w/1000;                     // P = T·ω
+    const Pac=Pm>=0?Pm/sc.etaM:Pm*sc.etaM, Pdc=Pm>=0?Pac/P.inverter_efficiency:Pac*P.inverter_efficiency, Pb=Pdc+P.aux_kw;
+    const ocv=305+0.9*soc; let V=ocv,I=0; for(let k=0;k<4;k++){I=Pb*1000/V;V=ocv-I*P.pack_resistance_ohm;}
+    const eff=Math.abs(Pm)>1?100*(Pm>0?Pm*P.drivetrain_efficiency/Pdc:Math.abs(Pdc)/(Math.abs(Pm)/P.drivetrain_efficiency)):0;
+    out.push({time_s:t,vehicle_speed_kmh:v*3.6,acceleration_ms2:a,motor_rpm:rpm,motor_torque_nm:T,motor_power_kw:Pm,battery_voltage_v:V,battery_current_a:I,battery_power_kw:V*I/1000,
+      battery_soc_pct:soc,motor_temp_c:Tm,inverter_temp_c:Ti,regen:Pm<-0.2?1:0,drive_eff_pct:Math.min(eff,100),dist_m:dist});
+    const lossM=(Pm>=0?Pm*(1/sc.etaM-1):-Pm*(1-sc.etaM))*sc.lossK+0.05, lossI=Math.abs(Pac)*(1-P.inverter_efficiency);
+    Tm+=DT*(lossM*1000-sc.hA*(Tm-25))/P.motor_thermal_c; Ti+=DT*(lossI*1000-30*(Ti-25))/P.inv_thermal_c;
+    soc-=ocv*I*DT/3600/(P.battery_kwh*1000)*100; dist+=v*DT;
+  }
+  return out;}
+// @@GEN-END
+const REQ=['time_s','vehicle_speed_kmh','acceleration_ms2','motor_rpm','motor_torque_nm','motor_power_kw','battery_voltage_v','battery_current_a','battery_power_kw','battery_soc_pct','motor_temp_c','inverter_temp_c','regen','dist_m'];
+function validate(T){
+  if(!Array.isArray(T)||!T.length) throw new Error('Telemetry initialization error: empty or invalid TELEMETRY');
+  for(const k of REQ) if(!(k in T[0])) throw new Error('Telemetry initialization error: missing field '+k);
+  for(let i=1;i<T.length;i++) if(!(T[i].time_s>T[i-1].time_s)) throw new Error('Telemetry initialization error: time not ordered at index '+i);
+  for(const r of T) for(const k of REQ) if(!Number.isFinite(r[k])) throw new Error('Telemetry initialization error: invalid value '+k+' @ '+r.time_s);
+  return T;}
+let TELEMETRY=validate(generateTelemetry(SCENARIOS.normal));
+const KEYS=Object.keys(TELEMETRY[0]);
+function sampleAt(t,o){const x=Math.min(Math.max(t,0),DURATION)/DT,i=Math.min(Math.floor(x),TELEMETRY.length-2),f=x-i,a=TELEMETRY[i],b=TELEMETRY[i+1];
+  for(const k of KEYS)o[k]=a[k]+(b[k]-a[k])*f; o.nearest_t=TELEMETRY[Math.min(Math.round(x),TELEMETRY.length-1)].time_s; return o;}
+
+/* ===== 3. DOM REFERENCES ===== */
+const $=id=>{const e=document.getElementById(id);if(!e)throw new Error('Missing DOM element #'+id);return e;};
+const D={scene:$('scene'),comps:$('comps'),scens:$('scens'),scnote:$('scnote'),rows:$('rows'),socbar:$('socbar'),flow:$('flow'),fdir:$('fdir'),graphs:$('graphs'),trows:$('trows'),
+  play:$('play'),scrub:$('scrub'),tl:$('tl'),spd:$('spd'),reset:$('reset'),warn:$('warn'),sim:$('sim')};
+
+/* ===== 4. THREE.JS INITIALIZATION ===== */
+const scene=new THREE.Scene(); scene.background=new THREE.Color(0x0f151c);
+const camera=new THREE.PerspectiveCamera(35,1,0.1,100);
+const renderer=new THREE.WebGLRenderer({antialias:true}); renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+D.scene.appendChild(renderer.domElement);
+scene.add(new THREE.HemisphereLight(0xb8cde0,0x1a222b,0.7));
+const key=new THREE.DirectionalLight(0xffffff,0.85); key.position.set(4,7,5); scene.add(key);
+const rim=new THREE.DirectionalLight(0x4a9be0,0.45); rim.position.set(-5,3,-4); scene.add(rim);
+const fill=new THREE.PointLight(0x88aacc,0.3,20); fill.position.set(0,-1.5,2); scene.add(fill);
+const grid=new THREE.GridHelper(16,32,0x2f5f8a,0x1d2732); scene.add(grid);
+
+/* ===== 5. MATERIALS ===== */
+const M=(c,o)=>new THREE.MeshStandardMaterial(Object.assign({color:c,metalness:0.6,roughness:0.4},o||{}));
+const bodyMat=M(0x6f9bc0,{metalness:0.3,roughness:0.25,transparent:true,opacity:0.13,depthWrite:false,side:THREE.DoubleSide});
+const chassisMat=M(0x3a4552,{metalness:0.7,roughness:0.5});
+const battShellMat=M(0x2b3540,{transparent:true,opacity:0.6});
+const modMats=[0,1,2,3,4,5].map(()=>M(0x2a7fc0,{emissive:0x1f8f6a,emissiveIntensity:0.5,metalness:0.3,roughness:0.5}));
+const inverterMat=M(0x5b6f84,{emissive:0x000000});
+const motorMat=M(0x4a86b8,{metalness:0.75,roughness:0.35,emissive:0x000000});
+const capMat=M(0x8b98a6,{metalness:0.8,roughness:0.3});
+const shaftMat=M(0xd5dbe2,{metalness:0.9,roughness:0.2});
+const markMat=M(0x4fcf82,{emissive:0x2a8f55,metalness:0.2});
+const gearMat=M(0x6c7a88,{metalness:0.8,roughness:0.35});
+const diffMat=M(0x8a8f96,{metalness:0.85,roughness:0.3});
+const tireMat=M(0x14181d,{metalness:0.1,roughness:0.9});
+const rimMat=M(0xa6b0ba,{metalness:0.9,roughness:0.25});
+const discMat=M(0x7a6a5a,{metalness:0.8,roughness:0.5});
+const cableMat=M(0x3d6f9c,{metalness:0.2,roughness:0.6});
+const flowMat=new THREE.MeshBasicMaterial({color:0x5fd0ff});
+const edgeMat=new THREE.LineBasicMaterial({color:0x6fa8dc,transparent:true,opacity:0.55});
+
+/* ===== 6. GEOMETRY HELPERS ===== */
+const R=VEHICLE_PARAMS.wheel_radius_m;
+function box(w,h,d,mat,x,y,z,parent){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);(parent||scene).add(m);return m;}
+function cylZ(r,len,mat,x,y,z,parent,seg){const g=new THREE.CylinderGeometry(r,r,len,seg||24);g.rotateX(Math.PI/2);const m=new THREE.Mesh(g,mat);m.position.set(x||0,y||0,z||0);(parent||scene).add(m);return m;}
+function rod(a,b,r,mat,parent){const va=new THREE.Vector3(...a),vb=new THREE.Vector3(...b),m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,va.distanceTo(vb),8),mat);
+  m.position.copy(va).add(vb).multiplyScalar(0.5);m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),vb.clone().sub(va).normalize());(parent||scene).add(m);return m;}
+function edges(mesh,parent){const l=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),edgeMat);l.position.copy(mesh.position);l.rotation.copy(mesh.rotation);(parent||scene).add(l);}
+
+/* ===== 7. COMPONENT CREATION ===== */
+// vehicle body (side profile extruded across width) + floor
+const prof=[[-2.2,0.28],[-2.24,0.62],[-2.12,0.92],[-1.75,1.02],[-1.25,1.5],[-0.8,1.56],[0.2,1.56],[0.75,1.2],[1.05,0.98],[2.0,0.86],[2.25,0.66],[2.26,0.3]];
+const shp=new THREE.Shape(); prof.forEach((p,i)=>i?shp.lineTo(p[0],p[1]):shp.moveTo(p[0],p[1])); shp.closePath();
+const bodyGeo=new THREE.ExtrudeGeometry(shp,{depth:1.7,bevelEnabled:false}); bodyGeo.translate(0,0,-0.85);
+const body=new THREE.Mesh(bodyGeo,bodyMat); scene.add(body); scene.add(new THREE.LineSegments(new THREE.EdgesGeometry(bodyGeo,25),edgeMat));
+box(4.3,0.04,1.5,chassisMat,0,0.3,0);
+box(0.06,0.06,1.5,chassisMat,-1.35,R,0); // rear beam axle (non-driven)
+
+// battery pack under floor
+const battery=new THREE.Group(); scene.add(battery);
+const shell=box(2.1,0.16,1.3,battShellMat,-0.35,0.2,0,battery); edges(shell,battery);
+for(let i=0;i<6;i++) box(0.31,0.12,1.14,modMats[i],-1.2+i*0.34,0.2,0,battery);
+
+// inverter, motor, gearbox, differential
+const inverter=new THREE.Group(); scene.add(inverter); const invBox=box(0.42,0.16,0.5,inverterMat,1.05,0.8,-0.35,inverter); edges(invBox,inverter);
+for(let i=0;i<5;i++) box(0.36,0.02,0.02,capMat,1.05,0.895,-0.53+i*0.09,inverter); // heat-sink fins
+const motor=new THREE.Group(); scene.add(motor);
+cylZ(0.17,0.44,motorMat,1.05,0.42,-0.42,motor); cylZ(0.185,0.03,capMat,1.05,0.42,-0.65,motor); cylZ(0.185,0.03,capMat,1.05,0.42,-0.19,motor);
+box(0.4,0.04,0.5,capMat,1.05,0.235,-0.42,motor); // mounting foot
+const shaftG=new THREE.Group(); shaftG.position.set(1.05,0.42,-0.42); motor.add(shaftG);
+cylZ(0.04,0.75,shaftMat,0,0,0,shaftG,12); box(0.3,0.03,0.02,markMat,0.1,0,-0.36,shaftG); box(0.02,0.02,0.7,markMat,0.045,0,0,shaftG);
+const gearbox=new THREE.Group(); scene.add(gearbox); const gbox=box(0.3,0.3,0.28,gearMat,1.08,0.42,-0.06,gearbox); edges(gbox,gearbox);
+const diff=new THREE.Group(); scene.add(diff); cylZ(0.11,0.26,diffMat,1.35,R,0,diff,20); rod([1.2,0.42,-0.06],[1.32,R,0],0.03,shaftMat,diff);
+const shaftL=cylZ(0.03,0.6,shaftMat,1.35,R,0.42,diff,10), shaftR=cylZ(0.03,0.6,shaftMat,1.35,R,-0.42,diff,10);
+// wheels (spin group rotates about the axle)
+const wheels=[];
+[[1.35,0.79],[1.35,-0.79],[-1.35,0.79],[-1.35,-0.79]].forEach(([x,z])=>{
+  const g=new THREE.Group(); g.position.set(x,R,z); scene.add(g); const spin=new THREE.Group(); g.add(spin);
+  cylZ(R,0.2,tireMat,0,0,0,spin,28); cylZ(0.215,0.205,rimMat,0,0,0,spin,24); cylZ(0.06,0.24,capMat,0,0,0,spin,12);
+  for(let k=0;k<5;k++){const s=box(0.4,0.04,0.21,rimMat,0,0,0,spin);s.rotation.z=k*Math.PI/5;}
+  cylZ(0.15,0.02,discMat,0,0,z>0?-0.07:0.07,spin,24); wheels.push({g,spin});});
+// power cables (static)
+rod([0.4,0.26,-0.3],[0.6,0.3,-0.3],0.02,cableMat); rod([0.6,0.3,-0.3],[0.6,0.78,-0.35],0.02,cableMat); rod([0.6,0.78,-0.35],[0.84,0.8,-0.35],0.02,cableMat); rod([1.05,0.72,-0.35],[1.05,0.56,-0.42],0.02,cableMat);
+
+/* energy-flow particles */
+function mkPath(pts){const p=pts.map(a=>new THREE.Vector3(...a)),cum=[0];for(let i=1;i<p.length;i++)cum.push(cum[i-1]+p[i].distanceTo(p[i-1]));return{p,cum,tot:cum[cum.length-1]};}
+const mainPts=[[0.4,0.24,-0.3],[0.6,0.3,-0.3],[0.6,0.78,-0.35],[1.05,0.8,-0.35],[1.05,0.5,-0.4],[1.08,0.42,-0.06],[1.35,R,0]];
+const paths=[mkPath(mainPts.concat([[1.35,R,0.79]])),mkPath(mainPts.concat([[1.35,R,-0.79]]))];
+const NP=16, parts=[]; const pGeo=new THREE.SphereGeometry(0.028,8,8);
+paths.forEach(pa=>{for(let i=0;i<NP;i++){const m=new THREE.Mesh(pGeo,flowMat);m.visible=false;scene.add(m);parts.push({m,pa,i});}});
+function pointAt(pa,u,out){const d=u*pa.tot;let k=1;while(k<pa.cum.length-1&&pa.cum[k]<d)k++;const f=(d-pa.cum[k-1])/Math.max(pa.cum[k]-pa.cum[k-1],1e-6);return out.copy(pa.p[k-1]).lerp(pa.p[k],f);}
+
+/* labels + selection highlight */
+function labelTex(txt,hi){const c=document.createElement('canvas');c.width=256;c.height=48;const x=c.getContext('2d');x.font='600 21px "Segoe UI",Arial,sans-serif';x.textAlign='center';x.textBaseline='middle';
+  x.fillStyle=hi?'rgba(24,60,40,.92)':'rgba(13,20,28,.72)';x.fillRect(0,4,256,40);x.strokeStyle=hi?'#4fcf82':'#405a72';x.strokeRect(.5,4.5,255,39);x.fillStyle=hi?'#8ff0b3':'#9fb3c6';x.fillText(txt,128,25);return new THREE.CanvasTexture(c);}
+const COMPS=[
+ {id:'battery',name:'Battery Pack',lab:'BATTERY',lp:[-0.5,-0.14,0.0],objs:[battery]},
+ {id:'inverter',name:'Inverter',lab:'INVERTER',lp:[0.55,1.32,-0.35],objs:[inverter]},
+ {id:'motor',name:'Electric Motor',lab:'MOTOR',lp:[0.55,-0.14,-0.75],objs:[motor]},
+ {id:'gearbox',name:'Reduction Gearbox',lab:'REDUCTION GEARBOX',lp:[1.15,-0.14,0.45],objs:[gearbox]},
+ {id:'diff',name:'Differential',lab:'DIFFERENTIAL',lp:[1.95,0.05,0.3],objs:[diff]},
+ {id:'wheels',name:'Drive Wheels',lab:'DRIVE WHEEL',lp:[1.35,0.85,1.0],objs:[wheels[0].g,wheels[1].g]}];
+COMPS.forEach(c=>{c.tN=labelTex(c.lab,false);c.tH=labelTex(c.lab,true);c.sp=new THREE.Sprite(new THREE.SpriteMaterial({map:c.tN,transparent:true,depthTest:false}));
+  c.sp.position.set(...c.lp);c.sp.scale.set(0.9,0.169,1);c.sp.renderOrder=5;scene.add(c.sp);
+  c.hl=c.objs.map(o=>{const h=new THREE.BoxHelper(o,0x4fcf82);h.visible=false;scene.add(h);return h;});});
+
+/* orbit camera (own implementation; no external controls) */
+const tgt=new THREE.Vector3(0,0.6,0); let az=0.95,el=0.4,dist=9,userZoom=false;
+function fitDist(){const fv=camera.fov*Math.PI/180,fh=2*Math.atan(Math.tan(fv/2)*camera.aspect);return 2.75/Math.sin(Math.min(fv,fh)/2)*1.05;}
+function applyCam(){camera.position.set(tgt.x+dist*Math.sin(az)*Math.cos(el),tgt.y+dist*Math.sin(el),tgt.z+dist*Math.cos(az)*Math.cos(el));camera.lookAt(tgt);camera.updateMatrixWorld();}
+function resetView(){az=0.95;el=0.4;tgt.set(0,0.6,0);userZoom=false;dist=fitDist();applyCam();}
+const cv=renderer.domElement; let drag=null;
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+cv.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY};cv.setPointerCapture(e.pointerId);cv.style.cursor='grabbing';});
+cv.addEventListener('pointerup',()=>{drag=null;cv.style.cursor='grab';});
+cv.addEventListener('pointermove',e=>{if(!drag)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;drag.x=e.clientX;drag.y=e.clientY;
+  if(e.buttons&2||e.shiftKey){const k=dist*0.0016,r=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,0),u=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,1);tgt.addScaledVector(r,-dx*k).addScaledVector(u,dy*k);}
+  else{az-=dx*0.006;el=Math.max(0.02,Math.min(1.45,el+dy*0.006));} applyCam();});
+cv.addEventListener('wheel',e=>{e.preventDefault();dist=Math.max(3,Math.min(22,dist*Math.exp(e.deltaY*0.001)));userZoom=true;applyCam();},{passive:false});
+D.reset.addEventListener('click',resetView);
+
+/* ===== 13. RESIZE HANDLING ===== */
+function resize(){const w=Math.max(D.scene.clientWidth,50),h=Math.max(D.scene.clientHeight,50);renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();if(!userZoom)dist=fitDist();applyCam();}
+new ResizeObserver(resize).observe(D.scene); window.addEventListener('resize',resize);
+
+/* ===== 8. TWIN STATE ===== */
+const twinState={simulationTime:0,telemetryTime:0,synchronized:false,vehicleSpeed:0,motorRPM:0,motorTorque:0,motorPower:0,batteryVoltage:0,batteryCurrent:0,batterySOC:0,motorTemperature:0,inverterTemperature:0,regenerativeBraking:false};
+const S={}; let selected=null;
+
+/* ===== 9. SIMULATION ===== */
+let simTime=0,playing=false,speedMult=1,lastNow=performance.now(),flowPhase=0,scrubbing=false;
+function readTelemetry(){sampleAt(simTime,S);const t=twinState;
+  t.simulationTime=simTime;t.telemetryTime=S.nearest_t;t.synchronized=Math.abs(t.simulationTime-t.telemetryTime)<SYNC_TOL;
+  t.vehicleSpeed=S.vehicle_speed_kmh;t.motorRPM=S.motor_rpm;t.motorTorque=S.motor_torque_nm;t.motorPower=S.motor_power_kw;t.batteryVoltage=S.battery_voltage_v;t.batteryCurrent=S.battery_current_a;
+  t.batterySOC=S.battery_soc_pct;t.motorTemperature=S.motor_temp_c;t.inverterTemperature=S.inverter_temp_c;t.regenerativeBraking=S.motor_power_kw<-0.2;}
+
+/* ===== 11. GRAPHS ===== */
+const GR=[{k:'vehicle_speed_kmh',t:'Speed (km/h)',c:'#4a9be0'},{k:'motor_rpm',t:'Motor RPM',c:'#e3a83a'},{k:'motor_torque_nm',t:'Torque (Nm)',c:'#4fcf82'},{k:'battery_soc_pct',t:'Battery SOC (%)',c:'#d5dde6'},{k:'motor_temp_c',t:'Motor Temp (°C)',c:'#e05a4e'}];
+GR.forEach(g=>{const d=document.createElement('div'),c=document.createElement('canvas');d.appendChild(c);D.graphs.appendChild(d);g.cv=c;
+  const seek=e=>{const r=c.getBoundingClientRect();simTime=Math.max(0,Math.min(DURATION,(e.clientX-r.left-6)/(r.width-12)*DURATION));};
+  c.addEventListener('pointerdown',e=>{seek(e);c.setPointerCapture(e.pointerId);c._d=1;});c.addEventListener('pointermove',e=>{if(c._d)seek(e);});c.addEventListener('pointerup',()=>{c._d=0;});});
+function ranges(){GR.forEach(g=>{let lo=Infinity,hi=-Infinity;TELEMETRY.forEach(r=>{lo=Math.min(lo,r[g.k]);hi=Math.max(hi,r[g.k]);});const p=Math.max((hi-lo)*0.12,0.5);g.lo=lo-p;g.hi=hi+p;});}
+function drawGraph(g){const c=g.cv,d=Math.min(window.devicePixelRatio||1,2),w=Math.floor(c.clientWidth*d),h=Math.floor(c.clientHeight*d);if(w<10||h<10)return;
+  if(c.width!==w||c.height!==h){c.width=w;c.height=h;}const x=c.getContext('2d');x.clearRect(0,0,w,h);
+  const L=6*d,Rr=w-6*d,T=22*d,B=h-6*d,X=t=>L+(t/DURATION)*(Rr-L),Y=v=>B-(v-g.lo)/(g.hi-g.lo)*(B-T);
+  x.strokeStyle='#243140';x.lineWidth=d;x.strokeRect(L,T,Rr-L,B-T);
+  if(g.lo<0&&g.hi>0){x.beginPath();x.moveTo(L,Y(0));x.lineTo(Rr,Y(0));x.stroke();}
+  x.strokeStyle=g.c;x.lineWidth=1.6*d;x.beginPath();TELEMETRY.forEach((r,i)=>{const px=X(r.time_s),py=Y(r[g.k]);i?x.lineTo(px,py):x.moveTo(px,py);});x.stroke();
+  x.strokeStyle='rgba(255,255,255,.6)';x.beginPath();x.moveTo(X(simTime),T);x.lineTo(X(simTime),B);x.stroke();
+  x.fillStyle=g.c;x.beginPath();x.arc(X(simTime),Y(S[g.k]),3*d,0,7);x.fill();
+  x.font=(10.5*d)+'px Segoe UI,Arial,sans-serif';x.fillStyle='#9fb0c1';x.textAlign='left';x.fillText(g.t,L,14*d);x.textAlign='right';x.fillStyle=g.c;x.fillText(S[g.k].toFixed(g.k==='battery_soc_pct'?2:1),Rr,14*d);}
+
+/* ===== 12. CONTROLS / UI BUILD ===== */
+const TEL=[['Vehicle Speed','vehicle_speed_kmh','km/h',1],['Motor RPM','motor_rpm','RPM',0],['Motor Torque','motor_torque_nm','Nm',1],['Motor Power','motor_power_kw','kW',1],['Battery Voltage','battery_voltage_v','V',1],
+  ['Battery Current','battery_current_a','A',1],['Battery SOC','battery_soc_pct','%',2],['Motor Temperature','motor_temp_c','°C',1],['Inverter Temperature','inverter_temp_c','°C',1]];
+const telEl=TEL.map(t=>{const r=document.createElement('div');r.className='r';r.innerHTML='<span>'+t[0]+'</span><span></span>';D.rows.appendChild(r);return r.lastChild;});
+const regenEl=(()=>{const r=document.createElement('div');r.className='r';r.innerHTML='<span>Regenerative Braking</span><span></span>';D.rows.appendChild(r);return r.lastChild;})();
+const TW=['Sim Time','Twin Time','Telemetry','Model State','Sync Status','Current Scenario','Drive Efficiency','Active Component'];
+const twEl=TW.map(n=>{const r=document.createElement('div');r.className='r';r.innerHTML='<span>'+n+'</span><span></span>';D.trows.appendChild(r);return r.lastChild;});
+const compEl=COMPS.map(c=>{const b=document.createElement('button');b.className='cb';b.innerHTML='<b>'+c.name+'</b><i></i><i></i>';b.onclick=()=>{selected=selected===c.id?null:c.id;applySelection();};D.comps.appendChild(b);return b;});
+Object.keys(SCENARIOS).forEach(k=>{const b=document.createElement('button');b.className='sb';b.textContent=SCENARIOS[k].label.replace(/^\w/,x=>x)+'';b.dataset.k=k;b.onclick=()=>setScenario(k);D.scens.appendChild(b);});
+const scBtns=[...D.scens.children];
+const FLOW=['BATTERY','INVERTER','MOTOR','GEARBOX','DIFFERENTIAL','WHEELS'],flowEl=FLOW.map(()=>{const d=document.createElement('div');D.flow.appendChild(d);return d;});
+[1,2,4].forEach(m=>{const b=document.createElement('button');b.className='b'+(m===1?' on':'');b.textContent=m+'x';b.style.marginLeft='4px';b.onclick=()=>{speedMult=m;[...D.spd.children].forEach(x=>x.classList.toggle('on',x===b));};D.spd.appendChild(b);});
+D.play.onclick=()=>{if(!playing&&simTime>=DURATION-0.01)simTime=0;playing=!playing;};
+D.scrub.addEventListener('pointerdown',()=>scrubbing=true);window.addEventListener('pointerup',()=>scrubbing=false);
+D.scrub.addEventListener('input',()=>{simTime=parseFloat(D.scrub.value);});
+function applySelection(){COMPS.forEach((c,i)=>{const on=selected===c.id;compEl[i].classList.toggle('on',on);c.sp.material.map=on?c.tH:c.tN;c.hl.forEach(h=>{h.visible=on;if(on)h.update();});});}
+function setScenario(k){scenarioKey=k;TELEMETRY=validate(generateTelemetry(SCENARIOS[k]));ranges();scBtns.forEach(b=>b.classList.toggle('on',b.dataset.k===k));
+  D.scnote.textContent=SCENARIOS[k].note;D.sim.textContent=k==='normal'?'':'SIMULATED SCENARIO — '+SCENARIOS[k].label;}
+
+/* ===== 10. VISUALIZATION UPDATE ===== */
+const tmp=new THREE.Vector3(), cNorm=new THREE.Color(0x4a86b8), cWarn=new THREE.Color(0xe3a83a), cHigh=new THREE.Color(0xe05a4e);
+function tempState(T){return T>THRESH.high?2:T>THRESH.warn?1:0;}
+const stTxt=['Nominal','Elevated','High temp'], stCls=['ok','wn','bad'];
+function updateVisual(dtSim){
+  const s=twinState, v=s.vehicleSpeed;
+  // wheel + shaft angles derive from integrated distance (telemetry), so scrubbing stays physically consistent
+  const wAng=S.dist_m/R, mAng=wAng*VEHICLE_PARAMS.gear_ratio;
+  wheels.forEach(w=>{w.spin.rotation.z=-wAng;}); shaftG.rotation.z=-mAng;
+  // motor colour by temperature, inverter by its temperature
+  const ms=tempState(s.motorTemperature); motorMat.color.copy(ms===0?cNorm:ms===1?cWarn:cHigh); motorMat.emissive.setHex(ms===2?0x5a1510:ms===1?0x3a2a08:0x000000);
+  const is=tempState(s.inverterTemperature); inverterMat.emissive.setHex(is===2?0x5a1510:is===1?0x3a2a08:0x000000);
+  // battery modules lit by SOC, colour by SOC band
+  const soc=s.batterySOC,col=soc>60?0x1f8f6a:soc>30?0xe3a83a:0xe05a4e,lit=Math.ceil(soc/100*6-1e-6);
+  modMats.forEach((m,i)=>{m.emissive.setHex(col);m.emissiveIntensity=i<lit?0.65:0.04;m.color.setHex(i<lit?(soc>60?0x2a7fc0:soc>30?0x9a7a30:0x9a4038):0x1c2530);});
+  // energy flow: direction from motor power sign
+  const P=s.motorPower,act=Math.abs(P)>0.3; flowMat.color.setHex(P<0?0xe3a83a:0x5fd0ff);
+  if(playing)flowPhase+=(P>=0?1:-1)*(0.2+0.5*Math.min(1,Math.abs(P)/60))*dtSim;
+  parts.forEach(p=>{p.m.visible=act;if(act){const u=(((flowPhase+p.i/NP)%1)+1)%1;p.m.position.copy(pointAt(p.pa,u,tmp));}});
+  // warnings
+  D.warn.innerHTML=ms===2?'<span class="bad">⚠ MOTOR TEMPERATURE HIGH</span>':ms===1?'<span class="wn">⚠ MOTOR TEMPERATURE ELEVATED</span>':(soc<30?'<span class="wn">LOW SOC</span>':'');
+}
+function updateUI(now){
+  const s=twinState;
+  TEL.forEach((t,i)=>{telEl[i].textContent=S[t[1]].toFixed(t[3])+' '+t[2];});
+  regenEl.textContent=s.regenerativeBraking?'ON':'OFF';regenEl.className=s.regenerativeBraking?'wn':'';
+  D.socbar.style.width=Math.max(0,Math.min(100,s.batterySOC))+'%';D.socbar.style.background=s.batterySOC>60?'#4fcf82':s.batterySOC>30?'#e3a83a':'#e05a4e';
+  // flow bar
+  const rg=s.regenerativeBraking,act=Math.abs(s.motorPower)>0.3,order=rg?FLOW.slice().reverse():FLOW,pi=Math.floor(now/260)%6;
+  D.flow.className=rg?'rg':'';D.fdir.textContent='Energy Flow — '+(rg?'Regenerative Braking':act?'Traction':'Idle');
+  flowEl.forEach((e,i)=>{e.textContent=order[i];e.className=act&&i<=pi?'on':'';});
+  // component status
+  const mst=tempState(s.motorTemperature),ist=tempState(s.inverterTemperature),lo=Math.abs(s.motorTorque)>1;
+  const cs=[[s.batterySOC.toFixed(1)+'% SOC',s.batteryVoltage.toFixed(0)+' V · '+s.batteryCurrent.toFixed(0)+' A'],
+   [rg?'AC → DC':'DC → AC',stTxt[ist]+' · '+s.inverterTemperature.toFixed(1)+' °C'],
+   [Math.round(s.motorRPM)+' RPM · '+s.motorTemperature.toFixed(1)+' °C',stTxt[mst]+' · '+s.motorTorque.toFixed(0)+' Nm'],
+   [VEHICLE_PARAMS.gear_ratio.toFixed(2)+':1',lo?(rg?'Regen load':'Loaded'):'Idle'],
+   ['Drive distribution',(S.vehicle_speed_kmh/3.6/R*60/(2*Math.PI)).toFixed(0)+' RPM axle'],
+   [s.vehicleSpeed.toFixed(1)+' km/h',(S.vehicle_speed_kmh/3.6/R).toFixed(1)+' rad/s']];
+  compEl.forEach((b,i)=>{b.children[1].textContent=cs[i][0];b.children[2].textContent=cs[i][1];});
+  // twin state panel
+  const sync=s.synchronized,eff=S.drive_eff_pct;
+  const tv=[s.simulationTime.toFixed(1)+' s',s.telemetryTime.toFixed(1)+' s',playing?'SYNTHETIC STREAM':'HELD','SIMULATION '+(playing?'RUNNING':'PAUSED'),sync?'SYNCHRONIZED':'DESYNCHRONIZED',SCENARIOS[scenarioKey].label,eff>1?eff.toFixed(1)+' %':'—',selected?COMPS.find(c=>c.id===selected).name:'—'];
+  twEl.forEach((e,i)=>{e.textContent=tv[i];e.className='';});twEl[4].className=sync?'ok':'bad';twEl[2].className=playing?'ok':'wn';twEl[5].className=scenarioKey==='normal'?'':'wn';
+  if(!scrubbing)D.scrub.value=simTime;D.tl.textContent=simTime.toFixed(1)+' / '+DURATION.toFixed(1)+' s';D.play.textContent=playing?'❚❚ Pause':'▶ Play';
+}
+function frame(now){
+  requestAnimationFrame(frame);
+  const dtReal=Math.min((now-lastNow)/1000,0.1);lastNow=now;
+  if(playing){simTime+=dtReal*speedMult;if(simTime>=DURATION){simTime=DURATION;playing=false;}}
+  readTelemetry();updateVisual(dtReal*speedMult);updateUI(now);GR.forEach(drawGraph);renderer.render(scene,camera);
+}
+
+/* ===== START ===== */
+ranges();setScenario('normal');resize();resetView();readTelemetry();applySelection();requestAnimationFrame(frame);
+}
+</script>
+</body></html>
